@@ -37,12 +37,12 @@ runs:
   using: composite
   steps:
     - name: Docker build
-      shell: shell
+      shell: bash
       run: |
         docker build -t ${{ inputs.image-name }}:${{ inputs.tag }} --build-arg NUGET_PAT=${{ inputs.nuget-pat }} .
 
     - name: Set up Clair
-      shell: shell
+      shell: bash
       run: |
         curl -L \
           https://github.com/arminc/clair-scanner/releases/download/v12/clair-scanner_linux_amd64 \
@@ -52,13 +52,13 @@ runs:
         docker run -p 6060:6060 --link clair-db:postgres -d --name clair arminc/clair-local-scan:latest
 
     - name: Scan image with Clair
-      shell: shell
+      shell: bash
       run: |
         ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
         ./clair-scanner --ip $ip ${{ inputs.image-name }}:${{ inputs.tag }}
 
     - name: ACR Push
-      shell: shell
+      shell: bash
       run: |
         if [[ "${{ inputs.should-push-to-acr }}" == true ]]; then
           az acr login -u ${{ inputs.client-id }} -p ${{ inputs.client-secret }} -n ${{ inputs.acr-name }}

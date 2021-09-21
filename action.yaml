@@ -1,0 +1,64 @@
+name: "Docker build, Clair scan, ACR push"
+description: "Action that simplifies building a docker image, then scanning it with Clair and finally pushing it to ACR."
+inputs:
+  image-name:
+    description: "Container repository and image name"
+    required: true
+
+  tag:
+    description: "Image tag, defaults to latest"
+    required: false
+    default: "latest"
+
+  should-push-to-acr:
+    description: "Should image be pushed to ACR"
+    required: true
+
+  client-id:
+    description: "Azure client id for authentication to ACR"
+    required: true
+
+  client-secret:
+    description: "Azure client secret for authentication to ACR"
+    required: true
+
+  acr-name:
+    description: "ACR instance name"
+    required: true
+
+  nuget-pat:
+    description: "Private nuget feed token"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Docker build
+      shell: shell
+      run: |
+        docker build -t ${{ inputs.image-name }}:${{ inputs.tag }} --build-arg NUGET_PAT=${{ inputs.nuget-pat }} .
+
+    - name: Set up Clair
+      shell: shell
+      run: |
+        curl -L \
+          https://github.com/arminc/clair-scanner/releases/download/v12/clair-scanner_linux_amd64 \
+          -o clair-scanner && \
+          chmod +x ./clair-scanner
+        docker run -d --name clair-db arminc/clair-db:latest
+        docker run -p 6060:6060 --link clair-db:postgres -d --name clair arminc/clair-local-scan:latest
+
+    - name: Scan image with Clair
+      shell: shell
+      run: |
+        ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+        ./clair-scanner --ip $ip ${{ inputs.image-name }}:${{ inputs.tag }}
+
+    - name: ACR Push
+      shell: shell
+      run: |
+        if [[ "${{ inputs.should-push-to-acr }}" == true ]]; then
+          az acr login -u ${{ inputs.client-id }} -p ${{ inputs.client-secret }} -n ${{ inputs.acr-name }}
+          docker push ${{ inputs.image-name }}:${{ inputs.tag }}
+        fi
+        exit 0

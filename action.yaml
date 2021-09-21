@@ -1,5 +1,8 @@
 name: "Docker build, Clair scan, ACR push"
 description: "Action that simplifies building a docker image, then scanning it with Clair and finally pushing it to ACR."
+branding:
+  icon: "package"
+  color: "green"
 inputs:
   image-name:
     description: "Container repository and image name"
